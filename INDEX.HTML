@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SC-TEPMS | النظام المالي للمعادن النفيسة</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- مكتبة التنبيهات -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <!-- مكتبة الرسوم البيانية للمؤشر المالي -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --bg-dark: #020617;
+            --glass: rgba(15, 23, 42, 0.75);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --gold: #D4AF37;
+            --gold-light: #FBF5B7;
+            --gold-glow: rgba(212, 175, 55, 0.3);
+            --success: #10b981;
+            --danger: #ef4444;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Cairo', sans-serif; }
+        
+        body {
+            background: radial-gradient(circle at top right, #1e293b, var(--bg-dark) 70%);
+            color: var(--text-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* حاويات الشاشات */
+        .view { display: none; width: 100%; min-height: 100vh; animation: fadeIn 0.4s ease-out; }
+        .view.active { display: flex; justify-content: center; align-items: center; }
+        .dashboard-view { display: none; width: 100%; min-height: 100vh; animation: fadeIn 0.4s; }
+        .dashboard-view.active { display: flex; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+
+        /* التصميم الزجاجي */
+        .glass-panel {
+            background: var(--glass); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
+            border: 1px solid var(--glass-border); border-radius: 24px; padding: 40px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.5); text-align: center; width: 100%; max-width: 450px;
+        }
+
+        h1 { color: var(--gold); font-size: 2.2rem; margin-bottom: 10px; text-shadow: 0 0 15px var(--gold-glow); }
+        .subtitle { color: var(--text-muted); font-size: 1rem; margin-bottom: 30px; }
+
+        input {
+            width: 100%; padding: 16px; margin-bottom: 20px;
+            background: rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.1);
+            color: white; border-radius: 12px; font-size: 1.1rem; text-align: center;
+            outline: none; transition: 0.3s;
+        }
+        input:focus { border-color: var(--gold); box-shadow: 0 0 15px var(--gold-glow); }
+
+        .btn {
+            background: linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7);
+            color: #000; border: none; padding: 16px; border-radius: 12px;
+            font-size: 1.2rem; font-weight: 800; cursor: pointer; transition: 0.3s; width: 100%;
+        }
+        .btn:hover { transform: translateY(-3px); box-shadow: 0 10px 25px var(--gold-glow); }
+        .btn-outline { background: transparent; color: var(--gold); border: 2px solid var(--gold); }
+        .btn-outline:hover { background: var(--gold); color: #000; }
+
+        /* --- تصميم لوحة التحكم (الداشبورد) --- */
+        .sidebar {
+            width: 280px; background: rgba(15, 23, 42, 0.9); border-left: 1px solid var(--glass-border);
+            padding: 30px 20px; display: flex; flex-direction: column; gap: 15px;
+        }
+        .sidebar-logo { font-size: 2rem; color: var(--gold); text-align: center; margin-bottom: 30px; font-weight: 800; }
+        
+        .nav-item {
+            padding: 15px 20px; border-radius: 12px; cursor: pointer; font-size: 1.1rem;
+            color: var(--text-muted); transition: 0.3s; display: flex; align-items: center; gap: 10px;
+        }
+        .nav-item:hover, .nav-item.active { background: rgba(212, 175, 55, 0.1); color: var(--gold); border: 1px solid rgba(212, 175, 55, 0.3); }
+        
+        .main-content { flex: 1; padding: 40px; overflow-y: auto; position: relative; }
+        
+        /* التبويبات الداخلية */
+        .tab-content { display: none; animation: fadeIn 0.4s; }
+        .tab-content.active { display: block; }
+
+        /* البطاقات الذكية */
+        .asset-card {
+            background: linear-gradient(145deg, rgba(255,255,255,0.05), rgba(0,0,0,0.5));
+            border: 1px solid var(--glass-border); border-radius: 20px; padding: 25px;
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;
+        }
+        
+        /* شاشات الانتظار */
+        .loader-box { text-align: center; padding: 40px; background: rgba(0,0,0,0.3); border-radius: 20px; border: 1px dashed var(--gold); }
+        .pulse-icon { font-size: 4rem; animation: pulse 1.5s infinite; margin-bottom: 20px; }
+        @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.2); opacity: 0.7; } 100% { transform: scale(1); opacity: 1; } }
+
+        /* تفاصيل السعر */
+        .price-breakdown { background: rgba(0,0,0,0.4); border-radius: 15px; padding: 20px; margin: 20px 0; border: 1px solid rgba(255,255,255,0.05); }
+        .detail-row { display: flex; justify-content: space-between; margin-bottom: 10px; color: #cbd5e1; font-size: 1.1rem; }
+        .detail-row.total { font-size: 1.4rem; font-weight: bold; color: var(--gold); border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px; margin-top: 10px; }
+
+        .empty-wallet { text-align: center; padding: 50px; color: var(--text-muted); }
+
+        /* مؤشر السوق (التشارت) */
+        .market-chart-container {
+            background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 20px; padding: 20px; margin-bottom: 30px; position: relative;
+        }
+        .market-stats { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .market-price { font-size: 2.5rem; font-weight: 800; color: #fff; }
+        .market-trend { background: rgba(16, 185, 129, 0.2); color: var(--success); padding: 5px 12px; border-radius: 8px; font-weight: bold; font-size: 1.1rem; }
+    </style>
+</head>
+<body>
+
+    <!-- ================= شاشة تسجيل الدخول ================= -->
+    <div id="login-view" class="view active">
+        <div class="glass-panel">
+            <h1>SC-TEPMS</h1>
+            <p class="subtitle">بوابتك لتوثيق المعادن النفيسة وحمايتها</p>
+            <input type="password" id="login-id" placeholder="أدخل الرمز السري هنا...">
+            <button class="btn" onclick="processLogin()">تسجيل الدخول للنظام</button>
+            <p style="margin-top: 25px; font-size: 0.85rem; color: #64748b;">
+                (المشتري: 123 | الشركة: 321)
+            </p>
+        </div>
+    </div>
+
+    <!-- ================= لوحة تحكم المشتري ================= -->
+    <div id="buyer-dashboard" class="dashboard-view">
+        <div class="sidebar">
+            <div class="sidebar-logo">معادني</div>
+            <div class="nav-item active" onclick="switchBuyerTab('wallet', this)">💼 محفظتي (أصولي)</div>
+            <div class="nav-item" onclick="switchBuyerTab('buy', this)">🛒 اشترِ الآن (السوق)</div>
+            <div style="margin-top: auto;" class="nav-item" onclick="location.reload()">🚪 تسجيل خروج</div>
+        </div>
+        
+        <div class="main-content">
+            <!-- 1. تبويب المحفظة -->
+            <div id="buyer-wallet-tab" class="tab-content active">
+                <h2 style="margin-bottom: 10px; color: var(--gold);">محفظة الأصول والممتلكات</h2>
+                <p class="subtitle">تظهر هنا أصولك الموثقة من المعادن النفيسة الخاضعة للحول والزكاة.</p>
+                <div id="wallet-items">
+                    <div class="empty-wallet">لا يوجد لديك أصول حالياً. اذهب إلى "السوق" لبدء الشراء والتوثيق.</div>
+                </div>
+            </div>
+
+            <!-- 2. تبويب السوق (يحتوي على الرسم البياني) -->
+            <div id="buyer-buy-tab" class="tab-content">
+                
+                <!-- مؤشر الذهب الحي (الرسم البياني) -->
+                <div class="market-chart-container">
+                    <div style="color: var(--text-muted); font-size: 1.1rem; margin-bottom: 5px;">مؤشر الذهب العالمي (عيار 24)</div>
+                    <div class="market-stats">
+                        <div class="market-price">315.50 <span style="font-size: 1.2rem; color: var(--text-muted);">ر.س/جرام</span></div>
+                        <div class="market-trend">صعود +1.2% ↗</div>
+                    </div>
+                    <div style="height: 180px; width: 100%;">
+                        <canvas id="goldChart"></canvas>
+                    </div>
+                </div>
+
+                <h2 style="margin-bottom: 10px; color: var(--gold);">إنشاء طلب توثيق وشراء</h2>
+                <p class="subtitle">أدخل رقم القطعة المعروضة لدى البائع لإنشاء طلب شراء.</p>
+                
+                <!-- خطوة 1: الإدخال -->
+                <div id="buy-step-1" class="glass-panel" style="max-width: 100%; margin: 0; padding: 30px;">
+                    <input type="text" id="item-code" placeholder="رقم القطعة (مثال: 123)">
+                    <button class="btn" onclick="createRequest()">إنشاء الطلب للموافقة ✔</button>
+                </div>
+
+                <!-- خطوة 2: انتظار البائع -->
+                <div id="buy-step-2" class="loader-box" style="display: none;">
+                    <div class="pulse-icon">⏳</div>
+                    <h2 style="color: var(--gold);">تم إرسال الطلب!</h2>
+                    <p style="margin-top: 10px;">ننتظر قيام التاجر بقبول الطلب وتحديد السعر النهائي...</p>
+                </div>
+
+                <!-- خطوة 3: إتمام العملية -->
+                <div id="buy-step-3" class="glass-panel" style="max-width: 100%; margin: 0; display: none;">
+                    <h2 style="color: var(--success); margin-bottom: 20px;">✓ وافق البائع وحدد السعر!</h2>
+                    <div class="asset-card" style="margin: 0; background: rgba(0,0,0,0.3);">
+                        <div>
+                            <h3 style="color: var(--gold);">سبيكة ذهب عيار 24</h3>
+                            <p style="color: var(--text-muted);">رقم القطعة: 123 | الوزن: 50 جرام</p>
+                        </div>
+                        <div style="font-size: 2rem;">👑</div>
+                    </div>
+                    
+                    <div class="price-breakdown">
+                        <div class="detail-row"><span>سعر القطعة (حدده البائع):</span> <span id="final-price">0 ر.س</span></div>
+                        <div class="detail-row"><span>ضريبة القيمة المضافة (15%):</span> <span id="final-vat">0 ر.س</span></div>
+                        <div class="detail-row total"><span>المبلغ الإجمالي للدفع:</span> <span id="final-total">0 ر.س</span></div>
+                    </div>
+
+                    <button class="btn" id="complete-btn" onclick="completeTransaction()">إتمام العملية والدفع 💳</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= لوحة تحكم التاجر ================= -->
+    <div id="seller-dashboard" class="dashboard-view">
+        <div class="sidebar">
+            <div class="sidebar-logo">معادني للأعمال</div>
+            <div class="nav-item active" onclick="switchSellerTab('inventory', this)">📦 منتجاتي المعروضة</div>
+            <div class="nav-item" onclick="switchSellerTab('requests', this)">🔔 الطلبات الواردة</div>
+            <div style="margin-top: auto;" class="nav-item" onclick="location.reload()">🚪 تسجيل خروج</div>
+        </div>
+        
+        <div class="main-content">
+            <div id="seller-inventory-tab" class="tab-content active">
+                <h2 style="margin-bottom: 10px; color: var(--gold);">مخزون المعادن النفيسة</h2>
+                <div class="asset-card" id="seller-item-card">
+                    <div>
+                        <h3 style="color: #fff;">سبيكة ذهب عيار 24</h3>
+                        <p style="color: var(--text-muted); margin-top: 5px;">رقم القطعة للتداول: <strong style="color: var(--gold);">123</strong></p>
+                    </div>
+                    <div style="background: rgba(16, 185, 129, 0.2); color: var(--success); padding: 5px 15px; border-radius: 20px;">متاحة للبيع</div>
+                </div>
+            </div>
+
+            <div id="seller-requests-tab" class="tab-content">
+                <h2 style="margin-bottom: 10px; color: var(--gold);">طلبات الشراء والتوثيق</h2>
+                
+                <div id="no-requests" class="empty-wallet">لا يوجد طلبات حالياً.</div>
+                
+                <div id="incoming-request-box" class="glass-panel" style="max-width: 100%; margin: 0; display: none;">
+                    <h2 style="color: var(--success); margin-bottom: 10px;">🔔 طلب شراء جديد!</h2>
+                    <p style="margin-bottom: 20px;">المشتري يطلب القطعة رقم (123). الرجاء إدخال السعر لإرساله للمشتري.</p>
+                    
+                    <input type="number" id="seller-price-input" placeholder="أدخل السعر الصافي بالريال (بدون ضريبة)...">
+                    <button class="btn" onclick="sendPriceToBuyer()">اعتماد السعر وإرساله للمشتري</button>
+                </div>
+
+                <div id="waiting-buyer-payment" class="loader-box" style="display: none; margin-top: 20px;">
+                    <div class="pulse-icon">💳</div>
+                    <h2 style="color: var(--gold);">تم إرسال السعر!</h2>
+                    <p style="margin-top: 10px;">ننتظر قيام المشتري بإتمام الدفع ونقل الملكية...</p>
+                </div>
+
+                <button class="btn btn-outline" id="sim-request-btn" style="margin-top: 30px;" onclick="simulateIncomingRequest()">
+                    (زر محاكاة: افتعل وصول طلب من مشتري الآن)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= سكريبت التحكم ================= -->
+    <script>
+        const BUYER_CODE = '123';
+        const SELLER_CODE = '321';
+        const VALID_ITEM = '123';
+
+        let chartInitialized = false;
+
+        function processLogin() {
+            const id = document.getElementById('login-id').value;
+            if (id === BUYER_CODE) {
+                document.getElementById('login-view').classList.remove('active');
+                document.getElementById('buyer-dashboard').classList.add('active');
+            } else if (id === SELLER_CODE) {
+                document.getElementById('login-view').classList.remove('active');
+                document.getElementById('seller-dashboard').classList.add('active');
+            } else {
+                Swal.fire({ icon: 'error', title: 'رمز غير صحيح', background: '#1e293b', color: '#fff' });
+            }
+        }
+
+        // --- وظائف المشتري والسوق ---
+        function switchBuyerTab(tabName, element) {
+            document.querySelectorAll('#buyer-dashboard .nav-item').forEach(el => el.classList.remove('active'));
+            element.classList.add('active');
+            
+            document.getElementById('buyer-wallet-tab').classList.remove('active');
+            document.getElementById('buyer-buy-tab').classList.remove('active');
+            
+            if(tabName === 'wallet') {
+                document.getElementById('buyer-wallet-tab').classList.add('active');
+            }
+            if(tabName === 'buy') {
+                document.getElementById('buyer-buy-tab').classList.add('active');
+                // رسم الخط البياني للذهب عند فتح صفحة السوق لأول مرة
+                if(!chartInitialized) {
+                    renderGoldChart();
+                    chartInitialized = true;
+                }
+            }
+        }
+
+        // كود رسم مؤشر الذهب
+        function renderGoldChart() {
+            const ctx = document.getElementById('goldChart').getContext('2d');
+            
+            // عمل تأثير تدرج لوني تحت الخط ليجعله فخماً
+            let gradient = ctx.createLinearGradient(0, 0, 0, 400);
+            gradient.addColorStop(0, 'rgba(212, 175, 55, 0.4)');
+            gradient.addColorStop(1, 'rgba(212, 175, 55, 0.0)');
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'اليوم (الآن)'],
+                    datasets: [{
+                        label: 'سعر الجرام (ريال سعودي)',
+                        data: [308, 309, 308.5, 311, 313, 314, 315.5],
+                        borderColor: '#D4AF37', // لون ذهبي
+                        backgroundColor: gradient,
+                        borderWidth: 3,
+                        pointBackgroundColor: '#fff',
+                        pointBorderColor: '#D4AF37',
+                        pointRadius: 4,
+                        fill: true,
+                        tension: 0.4 // لجعل الخط منحني وناعم
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false } // إخفاء المربع العلوي لأننا كتبناه في التصميم
+                    },
+                    scales: {
+                        x: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94a3b8', font: { family: 'Cairo' } } },
+                        y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94a3b8', font: { family: 'Cairo' } } }
+                    },
+                    animation: {
+                        duration: 2000,
+                        easing: 'easeOutQuart'
+                    }
+                }
+            });
+        }
+
+        function createRequest() {
+            const code = document.getElementById('item-code').value;
+            if (code !== VALID_ITEM) {
+                Swal.fire({ icon: 'warning', title: 'رقم القطعة غير صحيح!', text: 'الرقم المتاح للتجربة: 123', background: '#1e293b', color: '#fff' });
+                return;
+            }
+
+            document.getElementById('buy-step-1').style.display = 'none';
+            document.getElementById('buy-step-2').style.display = 'block';
+
+            setTimeout(() => {
+                const simulatedPrice = 15000;
+                const vat = simulatedPrice * 0.15;
+                const total = simulatedPrice + vat;
+
+                document.getElementById('final-price').innerText = simulatedPrice.toLocaleString() + ' ر.س';
+                document.getElementById('final-vat').innerText = vat.toLocaleString() + ' ر.س';
+                document.getElementById('final-total').innerText = total.toLocaleString() + ' ر.س';
+
+                document.getElementById('buy-step-2').style.display = 'none';
+                document.getElementById('buy-step-3').style.display = 'block';
+                
+                Swal.fire({ icon: 'success', title: 'البائع حدد السعر!', toast: true, position: 'top-end', timer: 3000, showConfirmButton: false, background: '#10b981', color: '#fff' });
+            }, 3000);
+        }
+
+        function completeTransaction() {
+            const btn = document.getElementById('complete-btn');
+            btn.innerText = 'جاري التوثيق مع ZATCA... ⏳';
+            btn.style.pointerEvents = 'none';
+
+            setTimeout(() => {
+                Swal.fire({
+                    icon: 'success', title: 'تم إتمام العملية بنجاح! 📜',
+                    html: 'تم سحب المبلغ، ودفع الضريبة للزكاة.<br><b>نُقلت القطعة إلى محفظتك!</b>',
+                    background: '#1e293b', color: '#fff', confirmButtonColor: '#D4AF37'
+                }).then(() => {
+                    document.getElementById('wallet-items').innerHTML = `
+                        <div class="asset-card" style="border-color: var(--success); box-shadow: 0 0 20px rgba(16,185,129,0.2);">
+                            <div>
+                                <h3 style="color: var(--gold);">سبيكة ذهب عيار 24</h3>
+                                <p style="color: var(--text-muted); margin: 5px 0;">رقم القطعة: 123</p>
+                                <span style="background: rgba(16,185,129,0.2); color: var(--success); padding: 4px 10px; border-radius: 10px; font-size: 0.85rem;">موثقة ومسجلة باسمك ✓</span>
+                            </div>
+                            <div style="font-size: 3rem;">👑</div>
+                        </div>
+                    `;
+                    document.getElementById('buy-step-3').style.display = 'none';
+                    document.getElementById('buy-step-1').style.display = 'block';
+                    document.getElementById('item-code').value = '';
+                    
+                    switchBuyerTab('wallet', document.querySelectorAll('#buyer-dashboard .nav-item')[0]);
+                });
+            }, 2000);
+        }
+
+        // --- وظائف التاجر ---
+        function switchSellerTab(tabName, element) {
+            document.querySelectorAll('#seller-dashboard .nav-item').forEach(el => el.classList.remove('active'));
+            element.classList.add('active');
+            
+            document.getElementById('seller-inventory-tab').classList.remove('active');
+            document.getElementById('seller-requests-tab').classList.remove('active');
+            
+            if(tabName === 'inventory') document.getElementById('seller-inventory-tab').classList.add('active');
+            if(tabName === 'requests') document.getElementById('seller-requests-tab').classList.add('active');
+        }
+
+        function simulateIncomingRequest() {
+            document.getElementById('no-requests').style.display = 'none';
+            document.getElementById('sim-request-btn').style.display = 'none';
+            document.getElementById('incoming-request-box').style.display = 'block';
+            Swal.fire({ icon: 'info', title: 'تنبيه', text: 'وصلك طلب شراء جديد!', toast: true, position: 'top-end', timer: 3000, showConfirmButton: false, background: '#1e293b', color: '#fff' });
+        }
+
+        function sendPriceToBuyer() {
+            const price = document.getElementById('seller-price-input').value;
+            if(!price || price <= 0) {
+                Swal.fire({ icon: 'warning', title: 'أدخل سعراً صحيحاً', background: '#1e293b', color: '#fff' });
+                return;
+            }
+
+            document.getElementById('incoming-request-box').style.display = 'none';
+            document.getElementById('waiting-buyer-payment').style.display = 'block';
+
+            setTimeout(() => {
+                document.getElementById('waiting-buyer-payment').style.display = 'none';
+                
+                Swal.fire({
+                    icon: 'success', title: 'المشتري أتم العملية! 💰',
+                    text: 'تم خصم الضريبة آلياً وتحويل المبلغ الصافي لحسابك.',
+                    background: '#1e293b', color: '#fff', confirmButtonColor: '#D4AF37'
+                }).then(() => {
+                    document.getElementById('seller-item-card').innerHTML = `
+                        <div>
+                            <h3 style="color: #fff; text-decoration: line-through;">سبيكة ذهب عيار 24</h3>
+                            <p style="color: var(--text-muted); margin-top: 5px;">رقم القطعة: 123</p>
+                        </div>
+                        <div style="background: rgba(239, 68, 68, 0.2); color: var(--danger); padding: 5px 15px; border-radius: 20px;">تم البيع ونقل الملكية</div>
+                    `;
+                    document.getElementById('no-requests').style.display = 'block';
+                    document.getElementById('no-requests').innerText = 'تم الانتهاء من جميع الطلبات.';
+                    document.getElementById('sim-request-btn').style.display = 'block';
+                    
+                    switchSellerTab('inventory', document.querySelectorAll('#seller-dashboard .nav-item')[0]);
+                });
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
